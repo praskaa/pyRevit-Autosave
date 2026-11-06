@@ -1,75 +1,64 @@
-from System.Collections.Generic import *
-from Autodesk.Revit.DB import *
-from pyrevit import revit, DB, UI
-from pyrevit import script
-from pyrevit import forms
-from pyrevit import EXEC_PARAMS
+from pyrevit.coreutils.ribbon import ICON_MEDIUM
+from pyrevit import script, forms
+from pyrevit.revit import ui
 from pyrevit.userconfig import user_config
-import time
-import os
+import pyrevit.extensions as exts
 
-doc = __eventargs__.Document
-pview = __eventargs__.PreviousActiveView
-if pview:
-    pview = pview.Document
-cview = __eventargs__.CurrentActiveView.Document
-title = doc.Title
-
-# data file will be saved in pyRevit Cache folder per document title.
-# Hash of the full path name to handle duplicate files in different folders.
-savestatus_datafile = os.path.join(
-    os.path.expandvars("%userprofile%\\AppData\\Roaming\\pyRevit\\Cache"),
-    title + str(hash(doc.PathName)) + "_savestatus.txt",
-)
-
-"""
-test if doc has a local file or return
-test if save log file exists or write log
-test if file is empty or write log
-check time
-save file and update time or return
-
-"""
-
-# Does not save detached, family, or unsaved documents
-active = not doc.IsDetached and not doc.IsFamilyDocument and len(doc.PathName) > 0
+__context__ = "zero-doc"
+__title__ = "Autosave"
+__author__ = "Alex D'Aversa"
 
 
-def read():
-    with open(savestatus_datafile, "r") as f:
-        for line in f:
-            x = line.split("|")
-            return x
+def __selfinit__(script_cmp, ui_button_cmp, __rvt__):
+    # PATCH: added 'return True' - pyRevit's loader expects __selfinit__ to
+    # return True; otherwise the button may not be created at all.
+    on_icon = ui.resolve_icon_file(
+        script_cmp.directory, exts.DEFAULT_ON_ICON_FILE
+    )
+    off_icon = ui.resolve_icon_file(
+        script_cmp.directory, exts.DEFAULT_OFF_ICON_FILE
+    )
+    if user_config.has_section("autosave") and user_config.autosave.has_option(
+        "enabled"
+    ):
+        enabled = user_config.autosave.get_option("enabled")
+    else:
+        user_config.add_section("autosave")
+        user_config.autosave.interval = 900
+        user_config.autosave.enabled = False
+        user_config.save_changes()
+        enabled = False
+    button_icon = script_cmp.get_bundle_file(on_icon if enabled else off_icon)
+    ui_button_cmp.set_icon(button_icon, icon_size=ICON_MEDIUM)
+    return True
 
 
-def write():
-    with open(savestatus_datafile, "w") as f:
-        f.write(str(doc.Title) + "|" + str(time.time()))
+def toggle_autosave():
+    # PATCH: single expression instead of if/else (behaviour identical)
+    user_config.autosave.enabled = not user_config.autosave.enabled
+    user_config.save_changes()
+    return user_config.autosave.enabled
 
 
-try:
-    if user_config.autosave.get_option("enabled"):
-        if active:
-            # test if file exists and contains data
-            if (
-                os.path.exists(savestatus_datafile)
-                and os.stat(savestatus_datafile).st_size > 0
-            ):
-                x = read()
-                if str(title) == x[0] and time.time() - float(
-                    x[1]
-                ) >= user_config.autosave.get_option("interval") and (pview == cview):
-                    try:
-                        with forms.ProgressBar(
-                            title="Autosaving...", indeterminate=True, cancellable=False
-                        ) as pb:
-                            pb.update_progress(1, 1)
-                            doc.Save()
-                        write()
-                    except:
-                        pass
-            # if no file exists or file is empty, write current timestamp but do not save file
-            else:
-                write()
-except:
-    pass
+def config_autosave_interval():
+    default_interval = user_config.autosave.interval / 60
+    interval = forms.GetValueWindow.show(
+        None,
+        value_type="slider",
+        default=default_interval,
+        prompt="Set autosave interval in minutes:",
+        title="Autosave Interval",
+        min=5,
+        max=240,
+    )
+    if interval:
+        user_config.autosave.interval = int(interval * 60)
+        user_config.save_changes()
+
+
+if __name__ == "__main__":
+    if __shiftclick__:
+        config_autosave_interval()
+    else:
+        is_active = toggle_autosave()
+        script.toggle_icon(is_active)
