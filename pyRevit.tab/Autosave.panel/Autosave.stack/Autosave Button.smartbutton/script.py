@@ -1,3 +1,5 @@
+from System import AppDomain
+
 from pyrevit.coreutils.ribbon import ICON_MEDIUM
 from pyrevit import script, forms
 from pyrevit.revit import ui
@@ -37,7 +39,26 @@ def toggle_autosave():
     # PATCH: single expression instead of if/else (behaviour identical)
     user_config.autosave.enabled = not user_config.autosave.enabled
     user_config.save_changes()
+    # tell startup.py right away (it also re-syncs from config every 30 s)
+    AppDomain.CurrentDomain.SetData(
+        "praskaa.autosave.enabled", bool(user_config.autosave.enabled)
+    )
     return user_config.autosave.enabled
+
+
+def notify_state(is_active):
+    minutes = int(user_config.autosave.interval / 60)
+    if is_active:
+        message = "Autosave is ON (every {} min).".format(minutes)
+    else:
+        message = "Autosave is OFF."
+    try:
+        forms.show_balloon("Autosave", message)
+    except Exception:
+        try:
+            forms.toast(message, title="Autosave")
+        except Exception as ex:
+            script.get_logger().debug("notification failed: %s", ex)
 
 
 def config_autosave_interval():
@@ -62,3 +83,4 @@ if __name__ == "__main__":
     else:
         is_active = toggle_autosave()
         script.toggle_icon(is_active)
+        notify_state(is_active)

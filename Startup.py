@@ -17,7 +17,8 @@
 #   enabled, interval (s), include_workshared, include_cloud_models
 #   view_settle (3 s), view_window (15 s), max_overdue (600 s),
 #   idle_required (20 s), indicator (true), indicator_offset_x (16),
-#   indicator_offset_y (44), indicator_opacity (0.4, range 0.1 - 1.0)
+#   indicator_offset_y (44), indicator_opacity (0.4, range 0.1 - 1.0),
+#   notifications (true)
 #
 # TODO: [FEATURE] skip save while Revit is in sketch / in-place edit mode
 # TODO: [FEATURE] confirm Idling frequency on a still screen (see log)
@@ -77,6 +78,8 @@ _next_tick = [0.0]
 _next_cfg = [0.0]
 _ind = {"win": None, "mode": None, "rect": None, "broken": False}
 _warned = {"idle": False}
+_startup_notice = [True]  # show the "Autosave is ON" notice once per session
+_notified_skip = set()  # documents already reported as skipped
 
 if _HAS_CTYPES:
     class _LASTINPUTINFO(ctypes.Structure):
@@ -130,16 +133,27 @@ def _is_cloud(doc):
         return False
 
 
-def _eligible(doc):
-    if doc.IsFamilyDocument or doc.IsLinked or doc.IsDetached:
-        return False
+# skip reasons worth telling the user about (the others are expected)
+NOTIFY_CODES = ("nopath", "optin")
+
+
+def _skip_reason(doc):
+    """Return (code, text) when autosave skips this document, else None."""
+    if doc.IsFamilyDocument:
+        return ("family", "it is a family document")
+    if doc.IsLinked or doc.IsDetached:
+        return ("linked", "it is a linked or detached document")
     if len(doc.PathName) == 0:
-        return False
+        return ("nopath", "it has not been saved to disk yet")
+    missing = []
     if doc.IsWorkshared and not _cfg("include_workshared", False):
-        return False
+        missing.append("include_workshared")
     if _is_cloud(doc) and not _cfg("include_cloud_models", False):
-        return False
-    return True
+        missing.append("include_cloud_models")
+    if missing:
+        options = ", ".join(name + " = true" for name in missing)
+        return ("optin", "it is disabled in config (set {})".format(options))
+    return None
 
 
 def _idle_seconds():
@@ -272,6 +286,28 @@ def _set_indicator(mode):
         logger.error("Autosave indicator disabled: %s", ex)
 
 
+# --- notifications ----------------------------------------------------------
+def _notify(message):
+    """Non-modal notice (never blocks Revit). Falls back to the log only."""
+    logger.info("Autosave: %s", message)
+    if not bool(_cfg("notifications", True)):
+        return
+    try:
+        from pyrevit import forms
+    except Exception as ex:
+        logger.debug("notification unavailable (forms import): %s", ex)
+        return
+    try:
+        forms.show_balloon("Autosave", message)
+        return
+    except Exception as ex:
+        logger.debug("show_balloon failed: %s", ex)
+    try:
+        forms.toast(message, title="Autosave")
+    except Exception as ex:
+        logger.debug("toast failed: %s", ex)
+
+
 # --- autosave ---------------------------------------------------------------
 def _do_save(doc, key, reason):
     logger.debug("autosave start (%s): %s", reason, doc.Title)
@@ -295,7 +331,26 @@ def _tick(uiapp, now):
     enabled = _is_enabled()
     uidoc = uiapp.ActiveUIDocument
     doc = uidoc.Document if uidoc is not None else None
-    eligible = enabled and doc is not None and _eligible(doc)
+    reason = _skip_reason(doc) if (enabled and doc is not None) else None
+    eligible = enabled and doc is not None and reason is None
+
+    if _startup_notice[0]:
+        _startup_notice[0] = False
+        if enabled:
+            minutes = int(float(_cfg("interval", 900)) / 60)
+            _notify("Autosave is ON (every {} min).".format(minutes))
+    if (
+        enabled
+        and reason is not None
+        and reason[0] in NOTIFY_CODES
+        and doc.Title not in _notified_skip
+    ):
+        _notified_skip.add(doc.Title)
+        _notify(
+            "Autosave is ON, but '{}' is skipped: {}.".format(
+                doc.Title, reason[1]
+            )
+        )
 
     if enabled and bool(_cfg("indicator", True)):
         _set_indicator("active" if eligible else "skipped")
