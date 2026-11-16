@@ -29,3 +29,20 @@ Note that undo history is lost after document saves: do not activate this tool i
 If Revit crashes unexpectedly while working in a central model, either open the local model directly and sync, or open the model from the cloud and select Keep my changes and open the model when prompted. This tool does not replace the synchronize tool or native Revit sync.
 
 If the autosave frequency is too frequent or infrequent, the Set Interval button can be used to adjust the frequency.
+
+### Workshared and cloud models
+
+Workshared and cloud models are excluded by default. To allow autosave for
+them, add these options to the `[autosave]` section of the pyRevit user
+configuration and restart/reload pyRevit:
+
+```ini
+include_workshared = true
+include_cloud_models = true
+```
+
+Autosave calls `Document.Save()` on the active document and does not call
+`SynchronizeWithCentral`; it is intended to save the local working copy only.
+Use Revit's normal Sync command when you want to publish changes to the
+central/cloud model. The diagnostic button reports eligibility but does not
+run a save test.
