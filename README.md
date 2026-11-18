@@ -20,29 +20,36 @@ In pyRevit, click Settings, expand the Custom Extension Directories section, and
 
 ## Usage
 
-pyRevit Autosave is designed to be set once and largely forgotten about (until Revit crashes, of course). To enable the plugin, click the Autosave button on the toolbar. The dot should turn orange indicating the plugin is active. No further configuration is needed!
+Click **AutoSave** in the ribbon to enable it for the current Revit session.
+Click it again to disable it. Each new Revit session starts OFF.
+Use **Set Interval** to change the saved interval preference.
 
-The plugin then runs in the background and will activate when switching between views to minimize interruption. A bar will appear at the top of the Revit window to indicate the document is saving. 
+| Ribbon status | Meaning |
+| --- | --- |
+| OFF | AutoSave is disabled. |
+| ON - Starting | Waiting for Revit to run the background handler. |
+| ON - Ready | The handler is running and the active document has no pending edits. |
+| ON - Waiting | The handler is running and waiting for the interval or a chance to save. |
+| ON - Saving | Revit is processing Save. |
+| ON - Saved | Revit confirmed the local save. |
+| ON - Skipped | The active document does not qualify for a local save. |
+| ON - Error | The engine could not start, save failed, or Revit did not confirm the save. |
 
-Note that undo history is lost after document saves: do not activate this tool if this is important to your workflows. 
+Hover over the AutoSave button or click **AutoSave Status** to see the
+reason and the time of the last confirmed AutoSave for an eligible document.
+Saving can clear Revit's undo history.
 
-If Revit crashes unexpectedly while working in a central model, either open the local model directly and sync, or open the model from the cloud and select Keep my changes and open the model when prompted. This tool does not replace the synchronize tool or native Revit sync.
+### Local save and worksharing
 
-If the autosave frequency is too frequent or infrequent, the Set Interval button can be used to adjust the frequency.
+AutoSave saves an existing local file or a verified local copy of a
+file-based workshared model. For cloud worksharing, it uses Revit's regular
+Save command (Ctrl+S) to save the working copy to Revit's local cache.
+Use **Synchronize with Central** manually to send changes to the shared model.
 
-### Workshared and cloud models
+A central model opened directly, a cloud model without worksharing, a linked
+or detached document, a read-only document, and a new document that needs
+its first Save As are skipped.
 
-Workshared and cloud models are excluded by default. To allow autosave for
-them, add these options to the `[autosave]` section of the pyRevit user
-configuration and restart/reload pyRevit:
-
-```ini
-include_workshared = true
-include_cloud_models = true
-```
-
-Autosave calls `Document.Save()` on the active document and does not call
-`SynchronizeWithCentral`; it is intended to save the local working copy only.
-Use Revit's normal Sync command when you want to publish changes to the
-central/cloud model. The diagnostic button reports eligibility but does not
-run a save test.
+Once the interval is due, AutoSave waits for a settled view change. If a
+save remains overdue for 10 minutes, AutoSave can also run after 20 seconds
+without mouse or keyboard input. These are the default timings.
