@@ -13,12 +13,21 @@ __author__ = "Alex D'Aversa"
 def __selfinit__(script_cmp, ui_button_cmp, __rvt__):
     on_icon = ui.resolve_icon_file(script_cmp.directory, "on.png")
     off_icon = ui.resolve_icon_file(script_cmp.directory, "off.png")
+    # The compiled pyRevit loader passes a SmartButtonContext. Older
+    # loaders pass a ribbon wrapper with the Python setters.
+    push_button = getattr(ui_button_cmp, "ui_button", None)
     icon_state = [None]
 
     def render():
         status = state.get("status") or "OFF"
-        ui_button_cmp.set_title("AutoSave\n" + status)
-        ui_button_cmp.set_tooltip(state.get("detail") or "Local AutoSave.")
+        title = "AutoSave\n" + status
+        tooltip = state.get("detail") or "Local AutoSave."
+        if push_button is not None:
+            push_button.ItemText = title
+            push_button.ToolTip = tooltip
+        else:
+            ui_button_cmp.set_title(title)
+            ui_button_cmp.set_tooltip(tooltip)
         is_on = status != "OFF"
         if icon_state[0] != is_on:
             ui_button_cmp.set_icon(
