@@ -22,6 +22,8 @@ In pyRevit, click Settings, expand the Custom Extension Directories section, and
 
 Click **AutoSave** in the ribbon to enable it for the current Revit session.
 Click it again to disable it. Each new Revit session starts OFF.
+When a document opens while AutoSave is OFF, pyRevit asks whether to enable
+it for the current session. Choose **No** to leave it OFF.
 Use **Set Interval** to change the saved interval preference.
 
 | Ribbon status | Meaning |
