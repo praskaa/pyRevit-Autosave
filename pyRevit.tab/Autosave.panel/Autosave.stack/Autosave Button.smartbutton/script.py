@@ -20,15 +20,17 @@ def __selfinit__(script_cmp, ui_button_cmp, __rvt__):
 
     def render():
         status = state.get("status") or "OFF"
-        title = "AutoSave\n" + status
+        is_on = status != "OFF"
+        title = "AutoSave\n" + (status if is_on else "OFF - CLICK TO ENABLE")
         tooltip = state.get("detail") or "Local AutoSave."
+        if not is_on:
+            tooltip = "AutoSave is OFF. Click this button to enable it for this Revit session.\n\n" + tooltip
         if push_button is not None:
             push_button.ItemText = title
             push_button.ToolTip = tooltip
         else:
             ui_button_cmp.set_title(title)
             ui_button_cmp.set_tooltip(tooltip)
-        is_on = status != "OFF"
         if icon_state[0] != is_on:
             ui_button_cmp.set_icon(
                 on_icon if is_on else off_icon, icon_size=ICON_MEDIUM
