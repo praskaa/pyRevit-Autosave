@@ -1,2 +1,2 @@
 title: AutoSave
-tooltip: Enable or disable local AutoSave for this Revit session.
+tooltip: AutoSave starts OFF each Revit session. Click to enable or disable local AutoSave for this session.
